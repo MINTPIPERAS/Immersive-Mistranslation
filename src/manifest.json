@@ -8,6 +8,7 @@
     "https://translate.googleapis.com/*",
     "https://fanyi-api.baidu.com/*"
   ],
+  "options_page": "options/options.html",
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "点击开始乱翻译",
@@ -27,7 +28,8 @@
       "matches": ["<all_urls>"],
       "js": ["content/content.js"],
       "css": ["content/styles.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "type": "module"
     }
   ],
   "icons": {

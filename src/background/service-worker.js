@@ -1,6 +1,6 @@
 import { initApiHandler } from './api-handler.js';
 
-const VERSION = '1.0.0-baidu';
+const VERSION = '2.0.0-pluggable';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log(`[乱翻译] 扩展已安装/更新，版本: ${VERSION}`);

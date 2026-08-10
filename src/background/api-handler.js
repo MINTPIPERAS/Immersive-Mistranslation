@@ -1,151 +1,147 @@
 /**
- * 后台 API 处理器：统一调用翻译 API
- * 优先使用已配置的百度翻译 API；未配置时回退到 Google Translate API
+ * 后台 API 处理器：基于可插拔后端注册表的翻译编排器
  */
-import { baiduTranslate, toBaiduCode } from './baidu-translator.js';
-
-const GOOGLE_TRANSLATE_API = 'https://translate.googleapis.com/translate_a/single';
+import { translateWithBackend, listBackends, getBackend } from './translators/index.js';
+import { Storage, getConfig, setConfig, getBackendConfig } from '../shared/storage.js';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * 从 storage 读取百度翻译配置
- */
-async function getBaiduConfig() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['baidu_appid', 'baidu_key'], (result) => {
-      if (result.baidu_appid && result.baidu_key) {
-        resolve({ appid: result.baidu_appid, key: result.baidu_key });
-      } else {
-        resolve(null);
-      }
-    });
-  });
-}
-
-/**
- * Google 单步翻译
- */
-async function googleTranslateStep(text, sourceLang, targetLang) {
-  const url = new URL(GOOGLE_TRANSLATE_API);
-  url.searchParams.append('client', 'gtx');
-  url.searchParams.append('sl', sourceLang);
-  url.searchParams.append('tl', targetLang);
-  url.searchParams.append('dt', 't');
-  url.searchParams.append('q', text);
-
-  try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    if (!data || !Array.isArray(data[0])) {
-      throw new Error('Invalid response format');
-    }
-
-    return data[0].map(part => part[0]).join('');
-  } catch (error) {
-    const isNetworkError = error instanceof TypeError;
-    const prefix = isNetworkError ? 'NETWORK_ERROR' : 'API_ERROR';
-    const detail = `${prefix}: ${error.message}`;
-    console.error('[乱翻译] Google 请求失败:', detail, '\nURL:', url.toString());
-    throw new Error(detail);
-  }
-}
-
-/**
- * 选择可用 API 进行回译，支持多条链路兜底
- */
-async function chainTranslate(text, chains) {
-  if (!Array.isArray(chains) || chains.length === 0) {
+function normalizeChain(chain) {
+  if (!Array.isArray(chain) || chain.length === 0) {
     throw new Error('NO_CHAIN: 未指定翻译链路');
   }
 
-  const baiduConfig = await getBaiduConfig();
-  let lastError = null;
-
-  for (let i = 0; i < chains.length; i++) {
-    const chain = chains[i];
-    const chainLabel = chain.map(s => `${s.source}->${s.target}`).join(' -> ');
-    console.log(`[乱翻译] 尝试链路 ${i + 1}/${chains.length}: ${chainLabel}`);
-
-    try {
-      let current = text;
-      for (const step of chain) {
-        current = await translateStep(current, step.source, step.target, baiduConfig);
-      }
-      console.log('[乱翻译] 链路翻译成功');
-      return current;
-    } catch (error) {
-      lastError = error;
-      console.error(`[乱翻译] 链路 ${i + 1} 失败:`, error.message);
-    }
+  // 字符串数组：['zh-CN', 'en', 'fi'] -> [{from:'zh-CN',to:'en'}, {from:'en',to:'fi'}]
+  if (chain.every(step => typeof step === 'string')) {
+    return chain.slice(0, -1).map((from, i) => ({
+      from,
+      to: chain[i + 1]
+    }));
   }
 
-  throw new Error(`ALL_CHAINS_FAILED: 所有链路均失败。${lastError?.message || ''}`);
+  return chain.map(step => {
+    if (typeof step === 'string') {
+      throw new Error('CHAIN_INVALID: 链路步骤格式异常');
+    }
+    return {
+      from: step.from || step.source,
+      to: step.to || step.target,
+      backendId: step.backendId || null
+    };
+  });
 }
 
-/**
- * 单步翻译：根据配置选择百度或 Google
- */
-async function translateStep(text, sourceLang, targetLang, baiduConfig) {
-  if (baiduConfig) {
-    try {
-      return await baiduTranslate(text, toBaiduCode(sourceLang), toBaiduCode(targetLang), baiduConfig);
-    } catch (error) {
-      console.error(`[乱翻译] 百度单步失败 ${sourceLang}->${targetLang}:`, error.message);
-      // 继续尝试 Google
-    }
+async function resolveDefaultBackendId(config, backendConfig) {
+  if (config?.defaultBackendId && getBackend(config.defaultBackendId)) {
+    return config.defaultBackendId;
   }
 
-  try {
-    return await googleTranslateStep(text, sourceLang, targetLang);
-  } catch (error) {
-    console.error(`[乱翻译] Google 单步失败 ${sourceLang}->${targetLang}:`, error.message);
-    throw error;
+  const baiduCfg = backendConfig?.baidu || {};
+  if (baiduCfg.appId && baiduCfg.apiKey) {
+    return 'baidu';
   }
+
+  return 'google';
 }
 
-/**
- * 批量翻译：顺序处理，逐个返回结果
- */
-async function translateBatch(texts, chains) {
+async function getTranslationConfig(payloadBackendConfig) {
+  if (payloadBackendConfig && Object.keys(payloadBackendConfig).length > 0) {
+    const config = await getConfig();
+    return { config, backendConfig: payloadBackendConfig };
+  }
+  const config = await getConfig();
+  return { config, backendConfig: config.backendConfig };
+}
+
+async function chainTranslate(text, chain, defaultBackendId, backendConfig) {
+  const normalized = normalizeChain(chain);
+  let current = text;
+
+  for (const step of normalized) {
+    const backendId = step.backendId || defaultBackendId;
+    const config = backendConfig?.[backendId] || {};
+    current = await translateWithBackend(backendId, current, step.from, step.to, config);
+  }
+
+  return current;
+}
+
+async function translateBatch(texts, chain, payloadBackendConfig, defaultBackendId) {
+  const { config, backendConfig } = await getTranslationConfig(payloadBackendConfig);
+  const resolvedDefault = defaultBackendId || await resolveDefaultBackendId(config, backendConfig);
+
   const results = [];
   for (const text of texts) {
     try {
-      const result = await chainTranslate(text, chains);
+      const result = await chainTranslate(text, chain, resolvedDefault, backendConfig);
       results.push(result);
     } catch (error) {
-      console.error('[乱翻译] 批量中单条失败:', error.message);
+      console.error('[乱翻译] 单条批量翻译失败:', error.message);
       results.push({ error: error.message });
     }
-    // QPS 保护：每处理完一段后稍等，避免触发百度频率限制
     await sleep(100);
   }
   return results;
 }
 
+async function translateSingle(text, chain, payloadBackendConfig, defaultBackendId) {
+  const { config, backendConfig } = await getTranslationConfig(payloadBackendConfig);
+  const resolvedDefault = defaultBackendId || await resolveDefaultBackendId(config, backendConfig);
+  return chainTranslate(text, chain, resolvedDefault, backendConfig);
+}
+
 export function initApiHandler() {
-  // 保留 sendMessage 用于简单的 ping / popup 状态广播等短响应
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'ping') {
-      sendResponse({ ok: true, version: '1.0.0-connect' });
+      sendResponse({ ok: true, version: '2.0.0-pluggable' });
       return false;
     }
+
+    if (request.action === 'listBackends') {
+      sendResponse({ success: true, backends: listBackends() });
+      return false;
+    }
+
+    if (request.action === 'getBackendConfig') {
+      (async () => {
+        try {
+          const config = await getBackendConfig(request.backendId);
+          sendResponse({ success: true, config });
+        } catch (error) {
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    if (request.action === 'setBackendConfig') {
+      (async () => {
+        try {
+          const current = await getConfig();
+          const merged = {
+            ...current,
+            backendConfig: {
+              ...current.backendConfig,
+              [request.backendId]: {
+                ...(current.backendConfig[request.backendId] || {}),
+                ...(request.config || {})
+              }
+            }
+          };
+          await setConfig(merged);
+          sendResponse({ success: true });
+        } catch (error) {
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
     return false;
   });
 
-  // 使用长连接处理翻译等耗时任务，避免 MV3 Service Worker 响应丢失
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== 'immersive-mistranslation') return;
 
@@ -155,41 +151,56 @@ export function initApiHandler() {
       const { requestId, action } = message;
       if (!requestId) return;
 
-      if (action === 'translateBatch') {
-        const { texts, chains } = message;
-        console.log('[乱翻译] 长连接收到批量翻译请求，文本数:', texts?.length, '链路数:', chains?.length);
+      try {
+        if (action === 'translateBatch') {
+          const { texts, chain, backendConfig, defaultBackendId } = message;
+          if (!Array.isArray(texts) || !Array.isArray(chain)) {
+            port.postMessage({
+              requestId,
+              response: { success: false, error: 'Missing texts or chain' }
+            });
+            return;
+          }
 
-        if (!Array.isArray(texts) || !Array.isArray(chains)) {
-          port.postMessage({
-            requestId,
-            response: { success: false, error: 'Missing texts or chains' }
-          });
-          return;
-        }
-
-        try {
-          const results = await translateBatch(texts, chains);
+          const results = await translateBatch(texts, chain, backendConfig, defaultBackendId);
           const successCount = results.filter(r => typeof r === 'string').length;
           console.log('[乱翻译] 批量翻译完成，成功:', successCount, '/', texts.length);
           port.postMessage({
             requestId,
             response: { success: true, results }
           });
-        } catch (error) {
-          console.error('[乱翻译] 批量翻译失败:', error);
+          return;
+        }
+
+        if (action === 'translate') {
+          const { text, chain, backendConfig, defaultBackendId } = message;
+          if (!text || !Array.isArray(chain)) {
+            port.postMessage({
+              requestId,
+              response: { success: false, error: 'Missing text or chain' }
+            });
+            return;
+          }
+
+          const result = await translateSingle(text, chain, backendConfig, defaultBackendId);
           port.postMessage({
             requestId,
-            response: { success: false, error: error.message || 'Translation batch failed' }
+            response: { success: true, result }
           });
+          return;
         }
-        return;
-      }
 
-      // 未知 action
-      port.postMessage({
-        requestId,
-        response: { success: false, error: `Unknown action: ${action}` }
-      });
+        port.postMessage({
+          requestId,
+          response: { success: false, error: `Unknown action: ${action}` }
+        });
+      } catch (error) {
+        console.error('[乱翻译] 长连接处理失败:', error);
+        port.postMessage({
+          requestId,
+          response: { success: false, error: error.message || 'Translation failed' }
+        });
+      }
     });
 
     port.onDisconnect.addListener(() => {
