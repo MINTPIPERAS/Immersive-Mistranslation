@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沉浸式乱翻译 — 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>沉浸式乱翻译 设置</header>
+
+    <section class="card">
+      <h2>默认翻译后端</h2>
+      <select id="defaultBackend"></select>
+      <p class="hint">如果链路中没有指定后端，将使用此默认后端</p>
+    </section>
+
+    <section class="card">
+      <h2>后端配置</h2>
+      <div class="backend-tabs" id="backendTabs"></div>
+      <div class="backend-config" id="backendConfig"></div>
+    </section>
+
+    <section class="card">
+      <h2>翻译链路</h2>
+      <div id="chainEditor"></div>
+      <button id="addStepBtn">+ 添加步骤</button>
+    </section>
+
+    <section class="card">
+      <h2>缓存管理</h2>
+      <p>已缓存 <span id="cacheCount">-</span> 条翻译结果</p>
+      <button id="clearCacheBtn">清空缓存</button>
+    </section>
+
+    <section class="card actions">
+      <button id="saveBtn">保存设置</button>
+      <button id="resetBtn">恢复默认</button>
+      <span id="saveStatus"></span>
+    </section>
+  </div>
+
+  <script src="options.js" type="module"></script>
+</body>
+</html>

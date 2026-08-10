@@ -1,0 +1,23 @@
+{
+  "name": "immersive-mistranslation",
+  "version": "1.0.0",
+  "description": "一个浏览器扩展（Chrome / Edge），通过多语言回译链路把网页文字翻译得面目全非，制造沉浸式“乱翻译”效果。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"No tests configured\" && exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/webextension-polyfill": "^0.12.5",
+    "vite": "^8.2.1",
+    "vite-plugin-web-extension": "^4.5.1"
+  }
+}
