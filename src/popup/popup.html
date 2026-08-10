@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沉浸式乱翻译</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <img src="../icons/icon32.png" alt="icon" class="icon">
+      <h1 class="title">沉浸式乱翻译</h1>
+    </header>
+
+    <p class="desc">把当前网页文字翻译到面目全非。</p>
+
+    <div id="chainInfo" class="chain-info"></div>
+
+    <div class="status-bar">
+      <span id="status">准备就绪</span>
+    </div>
+
+    <div class="progress-wrapper">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+
+    <div class="actions">
+      <button id="translateBtn" class="btn btn-primary">开始乱翻译</button>
+      <button id="restoreBtn" class="btn btn-secondary">恢复原文</button>
+    </div>
+
+    <div class="settings-toggle">
+      <button id="toggleSettingsBtn" class="btn btn-ghost">翻译设置</button>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h3>百度翻译 API 配置</h3>
+        <p class="settings-tip">国内网络建议配置百度翻译密钥，Google API 可能无法使用。</p>
+      </div>
+
+      <div class="form-group">
+        <label for="baiduAppId">App ID</label>
+        <input type="text" id="baiduAppId" placeholder="百度翻译 App ID">
+      </div>
+
+      <div class="form-group">
+        <label for="baiduKey">Secret Key</label>
+        <input type="password" id="baiduKey" placeholder="百度翻译 Secret Key">
+      </div>
+
+      <div class="settings-actions">
+        <button id="saveSettingsBtn" class="btn btn-primary btn-small">保存</button>
+        <button id="clearSettingsBtn" class="btn btn-secondary btn-small">清除</button>
+      </div>
+
+      <div id="settingsStatus" class="settings-status"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
