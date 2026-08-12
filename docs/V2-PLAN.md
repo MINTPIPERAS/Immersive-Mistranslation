@@ -25,17 +25,18 @@
 - 恢复模块化代码结构
 - 可插拔后端接口与注册表
 - 百度、Google 后端迁移为模块
+- **大模型乱译后端（OpenAI 兼容接口）**
 - Options 设置页
 - 翻译链路可视化编辑器
 - 缓存管理（查看、清除）
-- 配置持久化到 `chrome.storage.sync`（可选）或 `chrome.storage.local`
+- 配置持久化到 `chrome.storage.local`
 
 ### 2.2 不包含（V3）
 
 - 站点黑白名单
 - 智能区域选择（仅翻译正文）
 - 梗词库 / 本地破坏层
-- DeepL / DeepLX / OpenAI 后端实现（仅预留接口和注册位）
+- DeepL / DeepLX 后端实现（仅预留接口和注册位）
 - Firefox 支持
 - Chrome Web Store 上架
 
@@ -60,7 +61,7 @@ Immersive-Mistranslation/
 │   │       ├── google.js             # Google Translate API
 │   │       ├── deepl.js              # 预留：DeepL 官方 API
 │   │       ├── deeplx.js             # 预留：DeepLX 社区代理
-│   │       └── openai.js             # 预留：OpenAI / DeepSeek 兼容 API
+│   │       └── openai.js             # 大模型乱译后端（OpenAI 兼容）
 │   ├── content/
 │   │   ├── content.js                # 内容脚本入口
 │   │   ├── text-extractor.js         # 文本节点提取
@@ -348,7 +349,7 @@ const DEFAULT_CHAIN = {
 
 ## 七、后端扩展指南（预留）
 
-V2 为 DeepL / DeepLX / OpenAI 预留了注册位，但**不实现具体逻辑**。后续添加新后端时，只需：
+V2 为 DeepL / DeepLX 预留了注册位（OpenAI 已在 V2 实现）。后续添加新后端时，只需：
 
 1. 在 `src/background/translators/` 下新建 `xxx.js`
 2. 继承 `TranslatorBackend` 基类
@@ -420,16 +421,25 @@ export class DeepLXTranslator extends TranslatorBackend {
 
 ## 十、当前状态
 
-- [ ] Phase 1：Vite 迁移与模块化恢复
-- [ ] Phase 2：可插拔后端架构
-- [ ] Phase 3：Options 设置页
-- [ ] Phase 4：配置迁移与兼容性
-- [ ] Phase 5：测试与文档
+- [x] Phase 1：Vite 迁移与模块化恢复
+- [x] Phase 2：可插拔后端架构
+- [x] Phase 3：Options 设置页
+- [x] Phase 4：配置迁移与兼容性
+- [x] Phase 5：测试与文档
 
 ---
 
 ## 十一、下一步
 
-确认本计划后，从 **Phase 1：Vite 迁移与模块化恢复** 开始执行。
+V2 已全部完成。下一步可进入 V3：
 
-Phase 1 完成后应先验证 MVP 功能无损，再进入 Phase 2。
+- 站点黑白名单
+- 智能区域选择（仅翻译正文，避开导航/广告）
+- 梗词库替换，增强节目效果
+- 跨浏览器支持（Firefox）
+- Chrome Web Store 上架准备
+
+也可以继续迭代 V2：
+- 为 LLM 模式增加批量调用（一次 prompt 处理多段文本，降低成本）
+- 添加 DeepL / DeepLX 后端实现
+- 优化 popup 与 Options 的交互细节

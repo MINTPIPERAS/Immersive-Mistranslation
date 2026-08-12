@@ -118,6 +118,7 @@ Vite 会监听文件变化并自动构建，之后仍需在扩展管理页刷新
 2. 创建应用，选择 **通用翻译标准版**。
 3. 获取 **App ID** 和 **Secret Key**。
 4. 标准版一般有免费额度，按字符计费；当前主链路每条文本会调用 4 次 API，实际消耗 ≈ 原文字符数 × 4。
+5. 对于后者，如果失效会正常走谷歌链路 但是不影响正常使用 如有问题可以在Issue处提出探讨 
 
 ---
 
@@ -131,7 +132,7 @@ Vite 会监听文件变化并自动构建，之后仍需在扩展管理页刷新
 
 可用的后端包括：Google 翻译（免费）、百度翻译（需密钥）、**大模型乱译（OpenAI 兼容，需 API Key）**，以及 DeepL / DeepLX 的占位配置（后续版本实现）。
 
-> 当前版本已提供链路编辑界面并会保存配置；content script 真正从保存配置读取链路的完整逻辑将在后续 Phase 完成。
+> 当前版本已提供链路编辑界面并保存配置；翻译时会读取保存的链路。
 
 ---
 
@@ -174,13 +175,15 @@ Immersive-Mistranslation/
 │       ├── constants.js
 │       ├── storage.js
 │       └── message-bus.js
-├── scripts/
-│   └── build.js                   # 旧版构建脚本，V2 起不再使用
+├── tests/                         # 单元测试
+│   ├── setup.js                   # chrome API mock
+│   └── unit/                      # 后端、编排器、内容脚本测试
 ├── docs/
-│   ├── MVP-PLAN.md
-│   └── V2-PLAN.md
+│   ├── MVP-PLAN.md                # MVP 归档计划
+│   └── V2-PLAN.md                 # V2 已完成计划
 ├── package.json
 ├── vite.config.js
+├── vitest.config.mjs
 ├── README.md
 └── LICENSE
 ```
@@ -202,7 +205,8 @@ Immersive-Mistranslation/
 - [x] 页面内进度浮层
 - [x] popup 状态同步与 API 配置面板
 - [x] background port 断连自动重试
-- [ ] 自定义链路在 content script 真正生效（Phase 4 最后一步）
+- [x] 自定义链路在 content script 真正生效
+- [x] Vitest 单元测试（后端、编排器、内容脚本）
 
 ---
 
@@ -245,7 +249,7 @@ Immersive-Mistranslation/
 | V2 | 可插拔后端架构 | ✅ |
 | V2 | Options 设置页 | ✅ |
 | V2 | 大模型乱译模式（OpenAI 兼容） | ✅ |
-| V2 | 配置贯通（content script 读取 Options 保存的链路） | 进行中 |
+| V2 | 配置贯通（content script 读取 Options 保存的链路） | ✅ |
 | V3 | 站点黑白名单 | 待开始 |
 | V3 | 智能区域选择：仅翻译正文，避开导航/广告 | 待开始 |
 | V3 | 梗词库替换，增强节目效果 | 待开始 |

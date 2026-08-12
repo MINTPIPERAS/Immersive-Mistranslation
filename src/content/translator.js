@@ -16,10 +16,13 @@ import { sendToBackground } from '../shared/message-bus.js';
 import { extractTextNodes } from './text-extractor.js';
 import { backup, apply, originalTexts } from './dom-patcher.js';
 
-async function getActiveChain() {
+export async function getActiveChain() {
   const config = await Storage.get('mistranslationConfig', {});
   if (config.translationMode === TRANSLATION_MODES.LLM) {
     return DEFAULT_LLM_CHAIN;
+  }
+  if (Array.isArray(config.chain) && config.chain.length > 0) {
+    return config.chain;
   }
   return DEFAULT_CHAIN;
 }
