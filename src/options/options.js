@@ -1,9 +1,15 @@
 import { Storage } from '../shared/storage.js';
-import { CACHE_KEY_PREFIX, DEFAULT_BACKEND_ID, DEFAULT_CHAIN } from '../shared/constants.js';
+import {
+  CACHE_KEY_PREFIX,
+  DEFAULT_BACKEND_ID,
+  DEFAULT_CHAIN,
+  DEFAULT_LLM_CONFIG,
+  TRANSLATION_MODES
+} from '../shared/constants.js';
 
 const CONFIG_KEY = 'mistranslationConfig';
 
-const UNIMPLEMENTED_BACKENDS = new Set(['deepl', 'openai', 'deepLx']);
+const UNIMPLEMENTED_BACKENDS = new Set(['deepl', 'deepLx']);
 
 const LANGUAGES = [
   { code: 'zh-CN', name: '中文' },
@@ -40,22 +46,27 @@ const FALLBACK_BACKENDS = [
   { id: 'baidu', name: '百度翻译', requiresApiKey: true, defaultConfig: { appId: '', apiKey: '' } },
   { id: 'google', name: 'Google 翻译', requiresApiKey: false, defaultConfig: {} },
   { id: 'deepl', name: 'DeepL 翻译', requiresApiKey: true, defaultConfig: { apiKey: '' } },
-  { id: 'openai', name: 'OpenAI 兼容', requiresApiKey: true, defaultConfig: { apiKey: '', model: 'gpt-4o-mini', apiBase: 'https://api.openai.com/v1' } },
+  { id: 'openai', name: '大模型乱译 (OpenAI 兼容)', requiresApiKey: true, defaultConfig: { ...DEFAULT_LLM_CONFIG } },
   { id: 'deepLx', name: 'DeepLX', requiresApiKey: false, defaultConfig: { endpoint: '' } },
 ];
 
 const DEFAULT_CONFIG = {
   defaultBackendId: DEFAULT_BACKEND_ID,
+  translationMode: TRANSLATION_MODES.CHAIN,
   backendConfig: {
     baidu: { appId: '', apiKey: '' },
     deepl: { apiKey: '' },
-    openai: { apiKey: '', model: 'gpt-4o-mini', apiBase: 'https://api.openai.com/v1' },
+    openai: { ...DEFAULT_LLM_CONFIG },
     deepLx: { endpoint: '' },
   },
   chain: DEFAULT_CHAIN,
 };
 
-let state = { ...DEFAULT_CONFIG, backendConfig: { ...DEFAULT_CONFIG.backendConfig }, chain: DEFAULT_CHAIN.map(s => ({ ...s })) };
+let state = {
+  ...DEFAULT_CONFIG,
+  backendConfig: { ...DEFAULT_CONFIG.backendConfig },
+  chain: DEFAULT_CONFIG.chain.map(s => ({ ...s }))
+};
 let backends = [];
 let selectedBackendTab = null;
 
@@ -74,6 +85,7 @@ function loadBackends() {
 async function loadConfig() {
   const stored = await Storage.get(CONFIG_KEY, {});
   state.defaultBackendId = stored.defaultBackendId || DEFAULT_CONFIG.defaultBackendId;
+  state.translationMode = stored.translationMode || DEFAULT_CONFIG.translationMode;
   state.backendConfig = {
     ...DEFAULT_CONFIG.backendConfig,
     ...(stored.backendConfig || {}),
@@ -114,7 +126,10 @@ function renderDefaultBackend() {
 
 function getFieldType(fieldName) {
   if (fieldName === 'apiKey' || fieldName === 'appId') return 'password';
-  if (fieldName === 'endpoint') return 'url';
+  if (fieldName === 'endpoint' || fieldName === 'apiBase') return 'url';
+  if (fieldName === 'systemPrompt') return 'textarea';
+  if (fieldName === 'temperature') return 'range';
+  if (fieldName === 'maxRounds') return 'number';
   return 'text';
 }
 
@@ -126,6 +141,9 @@ function getFieldLabel(fieldName) {
     model: '模型',
     apiBase: 'API Base URL',
     endpoint: '端点地址',
+    systemPrompt: '系统提示词',
+    temperature: '随机性 (temperature)',
+    maxRounds: '模拟来回翻译次数'
   };
   return labels[fieldName] || fieldName;
 }
@@ -226,6 +244,62 @@ function renderBackendConfigForm(backendId) {
       });
       wrapper.appendChild(toggle);
       group.appendChild(wrapper);
+    } else if (fieldType === 'textarea') {
+      const textarea = document.createElement('textarea');
+      textarea.rows = 8;
+      textarea.value = cfg[fieldName] || '';
+      textarea.dataset.backendId = backendId;
+      textarea.dataset.field = fieldName;
+      textarea.addEventListener('input', () => {
+        if (!state.backendConfig[backendId]) {
+          state.backendConfig[backendId] = {};
+        }
+        state.backendConfig[backendId][fieldName] = textarea.value;
+      });
+      group.appendChild(textarea);
+    } else if (fieldType === 'range') {
+      const rangeWrapper = document.createElement('div');
+      rangeWrapper.className = 'range-wrapper';
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '2';
+      input.step = '0.1';
+      input.value = typeof cfg[fieldName] === 'number' ? cfg[fieldName] : 0.9;
+      input.dataset.backendId = backendId;
+      input.dataset.field = fieldName;
+
+      const valueLabel = document.createElement('span');
+      valueLabel.className = 'range-value';
+      valueLabel.textContent = input.value;
+
+      input.addEventListener('input', () => {
+        valueLabel.textContent = input.value;
+        if (!state.backendConfig[backendId]) {
+          state.backendConfig[backendId] = {};
+        }
+        state.backendConfig[backendId][fieldName] = parseFloat(input.value);
+      });
+
+      rangeWrapper.appendChild(input);
+      rangeWrapper.appendChild(valueLabel);
+      group.appendChild(rangeWrapper);
+    } else if (fieldType === 'number') {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '1';
+      input.max = '100';
+      input.value = typeof cfg[fieldName] === 'number' ? cfg[fieldName] : 20;
+      input.dataset.backendId = backendId;
+      input.dataset.field = fieldName;
+      input.addEventListener('input', () => {
+        if (!state.backendConfig[backendId]) {
+          state.backendConfig[backendId] = {};
+        }
+        state.backendConfig[backendId][fieldName] = parseInt(input.value, 10) || 0;
+      });
+      group.appendChild(input);
     } else {
       const input = document.createElement('input');
       input.type = fieldType;
@@ -312,6 +386,38 @@ function renderChainEditor() {
   });
 }
 
+function updateModeUI() {
+  const chainCard = document.getElementById('chainCard');
+  const modeHint = document.getElementById('modeHint');
+  const addStepBtn = document.getElementById('addStepBtn');
+
+  if (!chainCard || !modeHint) return;
+
+  if (state.translationMode === TRANSLATION_MODES.LLM) {
+    chainCard.classList.add('dimmed');
+    modeHint.textContent = '大模型乱译模式下，翻译链路由单条 LLM prompt 完成，链路编辑器仅作备用';
+    if (addStepBtn) addStepBtn.disabled = true;
+  } else {
+    chainCard.classList.remove('dimmed');
+    modeHint.textContent = '链式回译模式下，每步按翻译链路执行';
+    if (addStepBtn) addStepBtn.disabled = false;
+  }
+}
+
+function renderModeSelector() {
+  const radios = document.querySelectorAll('input[name="translationMode"]');
+  radios.forEach(radio => {
+    radio.checked = radio.value === state.translationMode;
+    radio.addEventListener('change', () => {
+      if (radio.checked) {
+        state.translationMode = radio.value;
+        updateModeUI();
+      }
+    });
+  });
+  updateModeUI();
+}
+
 function setStatus(msg, type) {
   const el = document.getElementById('saveStatus');
   el.textContent = msg;
@@ -328,6 +434,7 @@ async function saveConfig() {
   try {
     const config = {
       defaultBackendId: state.defaultBackendId,
+      translationMode: state.translationMode,
       backendConfig: state.backendConfig,
       chain: state.chain,
     };
@@ -351,10 +458,12 @@ async function saveConfig() {
 
 async function resetConfig() {
   state.defaultBackendId = DEFAULT_CONFIG.defaultBackendId;
+  state.translationMode = DEFAULT_CONFIG.translationMode;
   state.backendConfig = { ...DEFAULT_CONFIG.backendConfig };
   state.chain = DEFAULT_CONFIG.chain.map(s => ({ ...s }));
 
   renderDefaultBackend();
+  renderModeSelector();
   selectBackendTab(selectedBackendTab || (backends[0] && backends[0].id));
   renderChainEditor();
   setStatus('已恢复默认', 'success');
@@ -393,6 +502,7 @@ async function init() {
   await loadCacheCount();
 
   renderDefaultBackend();
+  renderModeSelector();
   renderBackendTabs();
   renderChainEditor();
 
