@@ -8,7 +8,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function normalizeChain(chain) {
+export function normalizeChain(chain) {
   if (!Array.isArray(chain) || chain.length === 0) {
     throw new Error('NO_CHAIN: 未指定翻译链路');
   }
