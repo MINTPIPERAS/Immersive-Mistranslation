@@ -17,12 +17,29 @@
     </section>
 
     <section class="card">
+      <h2>翻译模式</h2>
+      <div class="mode-selector" id="modeSelector">
+        <label class="mode-option">
+          <input type="radio" name="translationMode" value="chain" checked>
+          <span class="mode-title">链式回译</span>
+          <span class="mode-desc">按下方翻译链路逐步转换，依赖 Google / 百度等传统 API</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="translationMode" value="llm">
+          <span class="mode-title">大模型乱译</span>
+          <span class="mode-desc">用 LLM 单条 prompt 模拟数十次来回翻译，更无厘头</span>
+        </label>
+      </div>
+      <p class="hint mode-hint" id="modeHint">链式回译模式下，每步按翻译链路执行</p>
+    </section>
+
+    <section class="card">
       <h2>后端配置</h2>
       <div class="backend-tabs" id="backendTabs"></div>
       <div class="backend-config" id="backendConfig"></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="chainCard">
       <h2>翻译链路</h2>
       <div id="chainEditor"></div>
       <button id="addStepBtn">+ 添加步骤</button>

@@ -11,8 +11,16 @@ const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const clearSettingsBtn = document.getElementById('clearSettingsBtn');
 const settingsStatusEl = document.getElementById('settingsStatus');
 const chainInfoEl = document.getElementById('chainInfo');
+const modeSelect = document.getElementById('modeSelect');
+const llmStatusEl = document.getElementById('llmStatus');
+
+const TRANSLATION_MODES = {
+  CHAIN: 'chain',
+  LLM: 'llm'
+};
 
 let isTranslated = false;
+let currentConfig = null;
 
 // 当前翻译链路展示（需与 src/content/content.js 中的 TRANSLATION_CHAINS 主链路保持一致）
 const CURRENT_CHAIN_LABEL = '中 → 英 → 芬兰语 → 越南语 → 中';
@@ -55,7 +63,68 @@ function sendToActiveTab(action, payload = {}, callback = () => {}) {
   });
 }
 
+function getChainLabel(chain) {
+  return chain.map(s => `${s.from} → ${s.to}`).join(' → ');
+}
+
+async function loadConfig() {
+  const config = await new Promise((resolve) => {
+    chrome.storage.local.get(['mistranslationConfig'], (result) => {
+      resolve(result.mistranslationConfig || {});
+    });
+  });
+  currentConfig = config;
+  const mode = config.translationMode || TRANSLATION_MODES.CHAIN;
+  modeSelect.value = mode;
+  renderModeInfo(mode);
+}
+
+function getLlmConfig(config) {
+  return config?.backendConfig?.openai || {};
+}
+
+function renderModeInfo(mode) {
+  if (mode === TRANSLATION_MODES.LLM) {
+    chainInfoEl.classList.add('hidden');
+    llmStatusEl.classList.remove('hidden');
+    const llmCfg = getLlmConfig(currentConfig);
+    const hasKey = !!(llmCfg.apiKey && llmCfg.model && llmCfg.apiBase);
+    if (hasKey) {
+      llmStatusEl.textContent = `大模型模式：${llmCfg.model} · ${llmCfg.maxRounds || 20} 轮乱译`;
+      llmStatusEl.classList.remove('warning');
+    } else {
+      llmStatusEl.textContent = '大模型模式未配置：请在选项页设置 API Key / 模型 / API Base';
+      llmStatusEl.classList.add('warning');
+    }
+  } else {
+    chainInfoEl.classList.remove('hidden');
+    llmStatusEl.classList.add('hidden');
+    const chain = currentConfig?.chain || [];
+    chainInfoEl.textContent = chain.length
+      ? `当前链路：${getChainLabel(chain)}`
+      : `当前链路：中 → 英 → 芬兰语 → 越南语 → 中`;
+  }
+}
+
+modeSelect.addEventListener('change', async () => {
+  const mode = modeSelect.value;
+  currentConfig = currentConfig || {};
+  currentConfig.translationMode = mode;
+  await new Promise((resolve) => {
+    chrome.storage.local.set({ mistranslationConfig: currentConfig }, resolve);
+  });
+  renderModeInfo(mode);
+});
+
 translateBtn.addEventListener('click', () => {
+  const mode = modeSelect.value;
+  if (mode === TRANSLATION_MODES.LLM) {
+    const llmCfg = getLlmConfig(currentConfig);
+    if (!llmCfg.apiKey || !llmCfg.model || !llmCfg.apiBase) {
+      updateStatus('⚠️ 请先配置大模型 API');
+      return;
+    }
+  }
   updateStatus('翻译中...', 0);
   sendToActiveTab('startTranslation');
 });
@@ -80,6 +149,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // 打开 popup 时查询当前页面状态
+loadConfig();
 sendToActiveTab('getStatus', {}, (response) => {
   if (response && typeof response.translated === 'boolean') {
     updateUI(response.translated);
@@ -94,7 +164,7 @@ function showSettingsStatus(message, isError = false) {
 }
 
 function loadSettings() {
-  chrome.storage.local.get(['baidu_appid', 'baidu_key'], (result) => {
+  chrome.storage.local.get(['baidu_appid', 'baidu_key', 'mistranslationConfig'], (result) => {
     if (result.baidu_appid) {
       baiduAppIdInput.value = result.baidu_appid;
     }
@@ -102,7 +172,14 @@ function loadSettings() {
       baiduKeyInput.value = result.baidu_key;
     }
 
-    if (result.baidu_appid && result.baidu_key) {
+    // 如果新配置中也有百度密钥，优先显示
+    const baiduCfg = result.mistranslationConfig?.backendConfig?.baidu;
+    if (baiduCfg?.appId && baiduCfg?.apiKey) {
+      baiduAppIdInput.value = baiduCfg.appId;
+      baiduKeyInput.value = baiduCfg.apiKey;
+    }
+
+    if (baiduAppIdInput.value && baiduKeyInput.value) {
       showSettingsStatus('已配置百度翻译 API');
     } else {
       showSettingsStatus('尚未配置百度翻译 API', true);

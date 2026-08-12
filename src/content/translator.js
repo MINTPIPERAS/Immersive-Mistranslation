@@ -3,6 +3,8 @@
  */
 import {
   DEFAULT_CHAIN,
+  DEFAULT_LLM_CHAIN,
+  TRANSLATION_MODES,
   CACHE_KEY_PREFIX,
   CHUNK_SIZE,
   CHUNK_RETRY_DELAY,
@@ -13,6 +15,14 @@ import { Storage } from '../shared/storage.js';
 import { sendToBackground } from '../shared/message-bus.js';
 import { extractTextNodes } from './text-extractor.js';
 import { backup, apply, originalTexts } from './dom-patcher.js';
+
+async function getActiveChain() {
+  const config = await Storage.get('mistranslationConfig', {});
+  if (config.translationMode === TRANSLATION_MODES.LLM) {
+    return DEFAULT_LLM_CHAIN;
+  }
+  return DEFAULT_CHAIN;
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -25,10 +35,12 @@ export function getCacheKey(text) {
 export async function translateBatch(texts, timeoutMs = CHUNK_TIMEOUT) {
   if (texts.length === 0) return [];
 
+  const chain = await getActiveChain();
+
   console.log('[乱翻译] 发送批量翻译请求，文本数:', texts.length);
   const response = await sendToBackground('translateBatch', {
     texts,
-    chain: DEFAULT_CHAIN
+    chain
   }, timeoutMs);
 
   console.log('[乱翻译] background 批量响应:', response);

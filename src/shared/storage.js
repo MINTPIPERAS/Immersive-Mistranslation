@@ -3,17 +3,20 @@
  */
 import {
   DEFAULT_BACKEND_ID,
-  DEFAULT_CHAIN
+  DEFAULT_CHAIN,
+  DEFAULT_TRANSLATION_MODE,
+  DEFAULT_LLM_CONFIG
 } from './constants.js';
 
 const CONFIG_KEY = 'mistranslationConfig';
 
 const DEFAULT_CONFIG = {
   defaultBackendId: DEFAULT_BACKEND_ID,
+  translationMode: DEFAULT_TRANSLATION_MODE,
   backendConfig: {
     baidu: { appId: '', apiKey: '' },
     deepl: { apiKey: '' },
-    openai: { apiKey: '', model: 'gpt-4o-mini', apiBase: 'https://api.openai.com/v1' },
+    openai: { ...DEFAULT_LLM_CONFIG },
     deepLx: { endpoint: '' },
   },
   chain: DEFAULT_CHAIN,
@@ -54,6 +57,7 @@ export async function getConfig() {
       ...(stored.backendConfig || {}),
     },
     chain: stored.chain || DEFAULT_CONFIG.chain,
+    translationMode: stored.translationMode || DEFAULT_CONFIG.translationMode,
   };
 
   const legacyBaidu = await loadLegacyBaiduConfig();

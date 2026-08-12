@@ -15,7 +15,16 @@
 
     <p class="desc">把当前网页文字翻译到面目全非。</p>
 
+    <div class="mode-bar">
+      <label for="modeSelect">模式：</label>
+      <select id="modeSelect">
+        <option value="chain">链式回译</option>
+        <option value="llm">大模型乱译</option>
+      </select>
+    </div>
+
     <div id="chainInfo" class="chain-info"></div>
+    <div id="llmStatus" class="llm-status hidden"></div>
 
     <div class="status-bar">
       <span id="status">准备就绪</span>

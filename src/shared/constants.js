@@ -47,6 +47,35 @@ export const TRANSLATION_CHAINS = [
 
 export const CACHE_KEY_PREFIX = 'mistranslation_cache_';
 export const MIN_TEXT_LENGTH = 1;
+
+// 翻译模式
+export const TRANSLATION_MODES = {
+  CHAIN: 'chain',
+  LLM: 'llm'
+};
+export const DEFAULT_TRANSLATION_MODE = TRANSLATION_MODES.CHAIN;
+
+// 大模型默认配置（OpenAI 兼容接口）
+export const DEFAULT_LLM_SYSTEM_PROMPT = `你是一个“无厘头乱译引擎”。用户会给你一段文本，你要把它模拟经过 {maxRounds} 次不同语言之间的随机来回翻译。
+
+规则：
+1. 每次转换都要故意偏离原意一点，允许：词义替换、夸大、缩略、断章取义、加入网络梗、改变语序。
+2. 经过 {maxRounds} 轮随机语言转换后，最终用中文输出。
+3. 只输出最终的中文结果，不要解释，不要输出中间过程，不要添加额外说明，不要加引号。`;
+
+export const DEFAULT_LLM_CONFIG = {
+  apiKey: '',
+  model: 'gpt-4o-mini',
+  apiBase: 'https://api.openai.com/v1',
+  systemPrompt: DEFAULT_LLM_SYSTEM_PROMPT,
+  temperature: 0.9,
+  maxRounds: 20
+};
+
+// 大模型模式下的默认链路（单步：直接交给 OpenAI 后端内部模拟多次回译）
+export const DEFAULT_LLM_CHAIN = [
+  { from: 'zh-CN', to: 'zh-CN', backendId: 'openai' }
+];
 export const IGNORED_TAGS = new Set([
   'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'CODE', 'PRE'
 ]);
